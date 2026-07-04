@@ -1,0 +1,12 @@
+{
+  "name": "billiards-game",
+  "version": "1.0.0",
+  "description": "Browser-based billiards shot simulator",
+  "private": true,
+  "dependencies": {
+    "@upstash/redis": "^1.28.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
