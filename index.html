@@ -35,9 +35,16 @@ canvas{display:block;}
 .cam-btn{padding:4px 10px;border-radius:6px;border:0.5px solid #555;background:#222;color:#bbb;cursor:pointer;font-size:11px;}
 .cam-btn.active{background:#1a3a5c;border-color:#378add;color:#7ab8f5;}
 #space-hint{font-size:11px;color:#555;white-space:nowrap;}
+#msg-banner{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;width:680px;max-width:100%;}
+#msg-banner-title{font-size:12px;font-weight:700;color:#ccc;margin-bottom:3px;}
+#msg-banner-body{font-size:11px;color:#777;line-height:1.5;white-space:pre-wrap;}
 </style>
 </head><body>
 <h1>BILLIARDS SHOT SIMULATOR</h1>
+<div id="msg-banner" style="display:none;">
+  <div id="msg-banner-title"></div>
+  <div id="msg-banner-body"></div>
+</div>
 <div id="app">
   <div id="toolbar">
     <button class="btn" id="btnCB">Move CB</button>
@@ -80,6 +87,18 @@ canvas{display:block;}
 <script>
 // Visitor counter
 fetch('/api/visit')
+
+// Message banner — fetch from backend, show only if content exists
+fetch('/api/message')
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.title||d.body){
+      document.getElementById('msg-banner-title').textContent = d.title || '';
+      document.getElementById('msg-banner-body').textContent  = d.body  || '';
+      document.getElementById('msg-banner').style.display = 'block';
+    }
+  })
+  .catch(()=>{});
 
 // Visitor counter
 fetch('/api/visit').then(r=>r.json()).then(({count})=>{

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Billiards Message</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#111;color:#eee;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+h1{font-size:16px;font-weight:600;color:#aaa;letter-spacing:0.04em;margin-bottom:24px;}
+#panel{width:100%;max-width:480px;background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px;}
+label{font-size:12px;color:#888;margin-bottom:4px;display:block;}
+input,textarea{width:100%;background:#111;border:1px solid #444;border-radius:8px;color:#eee;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;resize:vertical;}
+input:focus,textarea:focus{border-color:#378add;}
+textarea{min-height:140px;}
+input[type=password]{letter-spacing:0.08em;}
+button{padding:10px;border-radius:8px;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:13px;font-weight:600;}
+button:hover{background:#1070b8;}
+button:disabled{background:#333;color:#666;cursor:default;}
+#status{font-size:12px;text-align:center;min-height:18px;}
+#preview{background:#111;border:1px solid #333;border-radius:8px;padding:12px;}
+#preview-title{font-size:13px;font-weight:700;color:#ddd;margin-bottom:6px;}
+#preview-body{font-size:12px;color:#999;line-height:1.6;white-space:pre-wrap;}
+#preview-updated{font-size:10px;color:#444;margin-top:8px;}
+.row{display:flex;flex-direction:column;gap:4px;}
+</style>
+</head><body>
+<h1>BILLIARDS — MESSAGE ADMIN</h1>
+<div id="panel">
+  <div class="row">
+    <label>Current message (live from database)</label>
+    <div id="preview">
+      <div id="preview-title">Loading…</div>
+      <div id="preview-body"></div>
+      <div id="preview-updated"></div>
+    </div>
+  </div>
+  <hr style="border:none;border-top:1px solid #2a2a2a;">
+  <div class="row">
+    <label for="inp-title">New title</label>
+    <input id="inp-title" type="text" placeholder="e.g. Welcome to Billiards!" maxlength="80">
+  </div>
+  <div class="row">
+    <label for="inp-body">Message body</label>
+    <textarea id="inp-body" placeholder="Write your message here. Line breaks are preserved."></textarea>
+  </div>
+  <div class="row">
+    <label for="inp-pass">Admin password</label>
+    <input id="inp-pass" type="password" placeholder="Your ADMIN_PASSWORD">
+  </div>
+  <button id="save-btn">Save message</button>
+  <div id="status"></div>
+</div>
+
+<script>
+const previewTitle   = document.getElementById('preview-title');
+const previewBody    = document.getElementById('preview-body');
+const previewUpdated = document.getElementById('preview-updated');
+const inpTitle  = document.getElementById('inp-title');
+const inpBody   = document.getElementById('inp-body');
+const inpPass   = document.getElementById('inp-pass');
+const saveBtn   = document.getElementById('save-btn');
+const statusEl  = document.getElementById('status');
+
+function loadCurrent(){
+  fetch('/api/message')
+    .then(r=>r.json())
+    .then(d=>{
+      previewTitle.textContent = d.title || '(no title set)';
+      previewBody.textContent  = d.body  || '(no message set)';
+      previewUpdated.textContent = d.updated
+        ? 'Last updated: '+new Date(d.updated).toLocaleString()
+        : '';
+    })
+    .catch(()=>{ previewTitle.textContent='Error loading message'; });
+}
+loadCurrent();
+
+saveBtn.addEventListener('click',()=>{
+  const title    = inpTitle.value.trim();
+  const body     = inpBody.value.trim();
+  const password = inpPass.value;
+
+  if(!title){ setStatus('Title is required.','error'); return; }
+  if(!body) { setStatus('Body is required.','error'); return; }
+  if(!password){ setStatus('Password is required.','error'); return; }
+
+  saveBtn.disabled=true;
+  setStatus('Saving…','info');
+
+  fetch('/api/message',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title,body,password})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.ok){
+      setStatus('✓ Saved! Visitors will see the new message immediately.','ok');
+      inpTitle.value='';
+      inpBody.value='';
+      inpPass.value='';
+      loadCurrent();
+    } else {
+      setStatus(d.error==='Unauthorized'?'Wrong password.':(d.error||'Error saving.'),'error');
+    }
+  })
+  .catch(()=>setStatus('Network error — check your connection.','error'))
+  .finally(()=>{ saveBtn.disabled=false; });
+});
+
+function setStatus(msg,type){
+  statusEl.textContent=msg;
+  statusEl.style.color = type==='ok'?'#4caf50' : type==='error'?'#f55' : '#aaa';
+}
+</script>
+</body></html>
