@@ -264,20 +264,73 @@ function runAnimation(){
   s.cbPos={...s.cb};s.obPos={...s.ob};s.cbVel={x:0,y:0};s.obVel={x:0,y:0};
   const pwr=parseInt(power$.value)/100,speed=pwr*18,shotDir=cbToGhostAngle();
   s.cbVel={x:Math.cos(shotDir)*speed,y:Math.sin(shotDir)*speed};
-  let collided=false,frame=0;
-  function step(){
-    if(myGen!==animGen)return;frame++;if(s.cueStrikeAnim>0)s.cueStrikeAnim--;
-    if(!s.cbPocketed){s.cbPos.x+=s.cbVel.x;s.cbPos.y+=s.cbVel.y;if(Math.abs(s.spinX)>.05){s.cbVel.x+=(-Math.sin(shotDir))*s.spinX*.018;s.cbVel.y+=(Math.cos(shotDir))*s.spinX*.018;}s.cbVel.x*=.985;s.cbVel.y*=.985;const sp=Math.sqrt(s.cbVel.x**2+s.cbVel.y**2);s.cbAngle+=(sp/BR)*(s.spinY===0?1:-s.spinY);clampBounds(s.cbPos,s.cbVel);if(frame%3===0){s.trails.push({x:s.cbPos.x,y:s.cbPos.y});if(s.trails.length>40)s.trails.shift();}}
-    if(!s.obPocketed&&(s.obVel.x||s.obVel.y)){s.obPos.x+=s.obVel.x;s.obPos.y+=s.obVel.y;s.obVel.x*=.988;s.obVel.y*=.988;const sp=Math.sqrt(s.obVel.x**2+s.obVel.y**2);s.obAngle+=(sp/BR)*(s.obVel.x>=0?1:-1);clampBounds(s.obPos,s.obVel);if(frame%3===0){s.obTrails.push({x:s.obPos.x,y:s.obPos.y});if(s.obTrails.length>40)s.obTrails.shift();}}
-    if(!collided&&!s.cbPocketed&&!s.obPocketed){const dx=s.obPos.x-s.cbPos.x,dy=s.obPos.y-s.cbPos.y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<BR*2+.5){collided=true;const nx=dx/dist,ny=dy/dist,vn=s.cbVel.x*nx+s.cbVel.y*ny;s.obVel.x=nx*vn*.93;s.obVel.y=ny*vn*.93;const tx2=s.cbVel.x-nx*vn,ty2=s.cbVel.y-ny*vn,sf=(-s.spinY)*vn*.22;s.cbVel.x=tx2*.9+nx*sf;s.cbVel.y=ty2*.9+ny*sf;statusEl.textContent='Hit!';}}
-    if(frame>4){if(!s.cbPocketed&&checkPocket(s.cbPos)){s.cbPocketed=true;s.cbVel={x:0,y:0};statusEl.textContent='Scratch!';}if(!s.obPocketed&&checkPocket(s.obPos)){s.obPocketed=true;s.obVel={x:0,y:0};statusEl.textContent='Potted!';}}
+  let collided=false,frame=0,lastStepTime=performance.now();
+
+  // Delta-time physics: all velocities are defined per 60fps frame (16.67ms).
+  // dt normalises each step so fast screens (120fps) and slow screens (30fps)
+  // advance the physics at the same real-world speed.
+  // We clamp dt to max 2 frames so a big pause (tab switch, etc.) doesn't
+  // teleport the balls across the table.
+  const BASE_MS = 16.667; // ms per frame at 60 fps
+
+  function step(now){
+    if(myGen!==animGen)return;
+    const dt = Math.min((now - lastStepTime) / BASE_MS, 2);
+    lastStepTime = now;
+    frame++;
+    if(s.cueStrikeAnim>0)s.cueStrikeAnim--;
+
+    // Per-frame friction coefficients converted to dt-scaled equivalents
+    // friction^dt keeps the decay rate the same regardless of frame rate
+    const fricCB = Math.pow(0.985, dt);
+    const fricOB = Math.pow(0.988, dt);
+
+    if(!s.cbPocketed){
+      s.cbPos.x+=s.cbVel.x*dt;s.cbPos.y+=s.cbVel.y*dt;
+      if(Math.abs(s.spinX)>.05){s.cbVel.x+=(-Math.sin(shotDir))*s.spinX*.018*dt;s.cbVel.y+=(Math.cos(shotDir))*s.spinX*.018*dt;}
+      s.cbVel.x*=fricCB;s.cbVel.y*=fricCB;
+      const sp=Math.sqrt(s.cbVel.x**2+s.cbVel.y**2);
+      s.cbAngle+=(sp/BR)*(s.spinY===0?1:-s.spinY)*dt;
+      clampBounds(s.cbPos,s.cbVel);
+      if(frame%3===0){s.trails.push({x:s.cbPos.x,y:s.cbPos.y});if(s.trails.length>40)s.trails.shift();}
+    }
+    if(!s.obPocketed&&(s.obVel.x||s.obVel.y)){
+      s.obPos.x+=s.obVel.x*dt;s.obPos.y+=s.obVel.y*dt;
+      s.obVel.x*=fricOB;s.obVel.y*=fricOB;
+      const sp=Math.sqrt(s.obVel.x**2+s.obVel.y**2);
+      s.obAngle+=(sp/BR)*(s.obVel.x>=0?1:-1)*dt;
+      clampBounds(s.obPos,s.obVel);
+      if(frame%3===0){s.obTrails.push({x:s.obPos.x,y:s.obPos.y});if(s.obTrails.length>40)s.obTrails.shift();}
+    }
+    if(!collided&&!s.cbPocketed&&!s.obPocketed){
+      const dx=s.obPos.x-s.cbPos.x,dy=s.obPos.y-s.cbPos.y,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<BR*2+.5){
+        collided=true;
+        const nx=dx/dist,ny=dy/dist,vn=s.cbVel.x*nx+s.cbVel.y*ny;
+        s.obVel.x=nx*vn*.93;s.obVel.y=ny*vn*.93;
+        const tx2=s.cbVel.x-nx*vn,ty2=s.cbVel.y-ny*vn,sf=(-s.spinY)*vn*.22;
+        s.cbVel.x=tx2*.9+nx*sf;s.cbVel.y=ty2*.9+ny*sf;
+        statusEl.textContent='Hit!';
+      }
+    }
+    if(frame>4){
+      if(!s.cbPocketed&&checkPocket(s.cbPos)){s.cbPocketed=true;s.cbVel={x:0,y:0};statusEl.textContent='Scratch!';}
+      if(!s.obPocketed&&checkPocket(s.obPos)){s.obPocketed=true;s.obVel={x:0,y:0};statusEl.textContent='Potted!';}
+    }
     ctx.clearRect(0,0,W,H);ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);drawTable();drawTrails();
     if(!s.obPocketed)drawBall(s.obPos.x,s.obPos.y,'#f5c518','8',s.obAngle,true,s.obVel.x,s.obVel.y,false);
     if(!s.cbPocketed)drawBall(s.cbPos.x,s.cbPos.y,'#f5f5f0','CB',s.cbAngle,true,s.cbVel.x,s.cbVel.y,true);
     sync3D();
     const csp=Math.sqrt(s.cbVel.x**2+s.cbVel.y**2),osp=Math.sqrt(s.obVel.x**2+s.obVel.y**2);
     if(csp>.08||osp>.08||(!collided&&csp>.04)){rafHandle=requestAnimationFrame(step);}
-    else{rafHandle=null;if(myGen!==animGen)return;s.animating=false;s.cueStrikeAnim=0;if(!s.cbPocketed)s.cb={...s.cbPos};if(!s.obPocketed)s.ob={...s.obPos};if(!s.cbPocketed&&!s.obPocketed)statusEl.textContent=collided?'Shot done. Hit ↩ Replay or Space to shoot again.':'Miss! Drag ghost ball to re-aim.';else if(s.obPocketed&&!s.cbPocketed)statusEl.textContent='Potted! Hit ↩ Replay to try again.';else statusEl.textContent='Scratch! Hit ↩ Replay to try again.';btnReplay.disabled=false;drawScene();}
+    else{
+      rafHandle=null;if(myGen!==animGen)return;s.animating=false;s.cueStrikeAnim=0;
+      if(!s.cbPocketed)s.cb={...s.cbPos};if(!s.obPocketed)s.ob={...s.obPos};
+      if(!s.cbPocketed&&!s.obPocketed)statusEl.textContent=collided?'Shot done. Hit ↩ Replay or Space to shoot again.':'Miss! Drag ghost ball to re-aim.';
+      else if(s.obPocketed&&!s.cbPocketed)statusEl.textContent='Potted! Hit ↩ Replay to try again.';
+      else statusEl.textContent='Scratch! Hit ↩ Replay to try again.';
+      btnReplay.disabled=false;drawScene();
+    }
   }
   rafHandle=requestAnimationFrame(step);
 }
@@ -299,7 +352,11 @@ function initThree(){
   scene3D=new THREE.Scene();scene3D.background=new THREE.Color(0x0a0a0a);
   camera3D=new THREE.PerspectiveCamera(55,680/300,1,4000);
   renderer3D=new THREE.WebGLRenderer({antialias:true});
-  renderer3D.setSize(680,300);renderer3D.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer3D.setSize(680,300);// Cap pixel ratio: high-DPI phones render 4x as many pixels at dpr=2.
+// Capping at 1.5 on small screens cuts GPU work significantly with
+// barely any visible quality difference at typical viewing distances.
+const isMobile = window.innerWidth < 768;
+renderer3D.setPixelRatio(Math.min(window.devicePixelRatio||1, isMobile ? 1.5 : 2));
   renderer3D.domElement.style.cssText='width:100%;height:100%;display:block;';
   wrap.appendChild(renderer3D.domElement);
   scene3D.add(new THREE.AmbientLight(0xffffff,.55));
