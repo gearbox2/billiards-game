@@ -35,10 +35,10 @@ canvas{display:block;}
 .cam-btn{padding:4px 10px;border-radius:6px;border:0.5px solid #555;background:#222;color:#bbb;cursor:pointer;font-size:11px;}
 .cam-btn.active{background:#1a3a5c;border-color:#378add;color:#7ab8f5;}
 #space-hint{font-size:11px;color:#555;white-space:nowrap;}
-#msg-banner{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;width:680px;max-width:100%;}
+#msg-banner{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;width:100%;}
 #msg-banner-title{font-size:12px;font-weight:700;color:#ccc;margin-bottom:3px;}
 #msg-banner-body{font-size:11px;color:#777;line-height:1.5;white-space:pre-wrap;}
-#signup-bar{display:flex;align-items:center;gap:8px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;width:680px;max-width:100%;flex-wrap:wrap;}
+#signup-bar{display:flex;align-items:center;gap:8px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;width:100%;flex-wrap:wrap;}
 #signup-bar label{font-size:12px;color:#777;white-space:nowrap;flex-shrink:0;}
 #signup-email{flex:1;min-width:160px;background:#111;border:1px solid #383838;border-radius:6px;color:#eee;padding:6px 10px;font-size:12px;outline:none;}
 #signup-email:focus{border-color:#378add;}
@@ -49,17 +49,17 @@ canvas{display:block;}
 </style>
 </head><body>
 <h1>BILLIARDS SHOT SIMULATOR</h1>
-<div id="msg-banner" style="display:none;">
-  <div id="msg-banner-title"></div>
-  <div id="msg-banner-body"></div>
-</div>
-<div id="signup-bar">
-  <label>📬 Get updates:</label>
-  <input id="signup-email" type="email" placeholder="your@email.com" maxlength="120" autocomplete="email">
-  <button id="signup-btn">Notify me</button>
-  <div id="signup-status"></div>
-</div>
 <div id="app">
+  <div id="msg-banner">
+    <div id="msg-banner-title">Welcome!</div>
+    <div id="msg-banner-body">Drag the ghost ball to aim your shot. Use Move CB / Move OB to reposition balls.</div>
+  </div>
+  <div id="signup-bar">
+    <label>Get updates:</label>
+    <input id="signup-email" type="email" placeholder="your@email.com" maxlength="120" autocomplete="email">
+    <button id="signup-btn">Notify me</button>
+    <div id="signup-status"></div>
+  </div>
   <div id="toolbar">
     <button class="btn" id="btnCB">Move CB</button>
     <button class="btn" id="btnOB">Move OB</button>
@@ -95,77 +95,52 @@ canvas{display:block;}
     <div id="status">Drag the ghost ball to aim. Press Space to shoot.</div>
     <span id="visitor-count">👁 —</span>
   </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // Visitor counter
-fetch('/api/visit')
+fetch('/api/visit').then(function(r){return r.json();}).then(function(d){
+  if(d.count!=null)document.getElementById('visitor-count').textContent='\u{1F441} '+d.count.toLocaleString()+' visits';
+}).catch(function(){});
+
+// Message banner
+fetch('/api/message').then(function(r){return r.json();}).then(function(d){
+  if(d.title) document.getElementById('msg-banner-title').textContent=d.title;
+  if(d.body)  document.getElementById('msg-banner-body').textContent=d.body;
+}).catch(function(){
+  // API unavailable - default text already shown, nothing to do
+});
 
 // Email signup
 (function(){
-  const emailEl  = document.getElementById('signup-email');
-  const btn      = document.getElementById('signup-btn');
-  const statusEl = document.getElementById('signup-status');
-
-  // If already signed up this browser session, show confirmation immediately
+  var emailEl=document.getElementById('signup-email');
+  var btn=document.getElementById('signup-btn');
+  var statusEl=document.getElementById('signup-status');
   if(localStorage.getItem('billiards:signed_up')){
-    btn.textContent='✓ Signed up';
-    btn.disabled=true;
-    emailEl.style.display='none';
-    statusEl.style.color='#4caf50';
-    statusEl.textContent='You're on the list!';
+    btn.textContent='Signed up';btn.disabled=true;emailEl.style.display='none';
+    statusEl.style.color='#4caf50';statusEl.textContent='You are on the list!';
   }
-
-  btn.addEventListener('click',()=>{
-    const email = emailEl.value.trim();
-    if(!email){ setS('Please enter your email.','error'); return; }
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ setS('Please enter a valid email.','error'); return; }
-    btn.disabled=true; setS('Signing up…','info');
-    fetch('/api/signup',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email})
-    })
-    .then(r=>r.json())
-    .then(d=>{
+  function setS(msg,type){statusEl.textContent=msg;statusEl.style.color=type==='ok'?'#4caf50':type==='error'?'#f55':'#aaa';}
+  btn.addEventListener('click',function(){
+    var email=emailEl.value.trim();
+    if(!email){setS('Please enter your email.','error');return;}
+    if(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))){setS('Please enter a valid email.','error');return;}
+    btn.disabled=true;setS('Signing up...','info');
+    fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
+    .then(function(r){return r.json();})
+    .then(function(d){
       if(d.ok){
         localStorage.setItem('billiards:signed_up','1');
-        btn.textContent='✓ Signed up';
-        emailEl.style.display='none';
-        setS(d.already?'You're already on the list!':'Thanks! You're on the list.','ok');
-      } else {
-        btn.disabled=false;
-        setS(d.error||'Something went wrong.','error');
-      }
+        btn.textContent='Signed up';emailEl.style.display='none';
+        setS(d.already?'Already on the list!':'Thanks! You are on the list.','ok');
+      }else{btn.disabled=false;setS(d.error||'Something went wrong.','error');}
     })
-    .catch(()=>{ btn.disabled=false; setS('Network error, please try again.','error'); });
+    .catch(function(){btn.disabled=false;setS('Network error, please try again.','error');});
   });
-
-  emailEl.addEventListener('keydown',e=>{ if(e.key==='Enter')btn.click(); });
-
-  function setS(msg,type){
-    statusEl.textContent=msg;
-    statusEl.style.color=type==='ok'?'#4caf50':type==='error'?'#f55':'#aaa';
-  }
+  emailEl.addEventListener('keydown',function(e){if(e.key==='Enter')btn.click();});
 })();
-
-// Message banner — fetch from backend, show only if content exists
-fetch('/api/message')
-  .then(r=>r.json())
-  .then(d=>{
-    if(d.title||d.body){
-      document.getElementById('msg-banner-title').textContent = d.title || '';
-      document.getElementById('msg-banner-body').textContent  = d.body  || '';
-      document.getElementById('msg-banner').style.display = 'block';
-    }
-  })
-  .catch(()=>{});
-
-// Visitor counter
-fetch('/api/visit').then(r=>r.json()).then(({count})=>{
-  if(count!=null)document.getElementById('visitor-count').textContent='👁 '+count.toLocaleString()+' visits';
-}).catch(()=>{});
 
 const canvas=document.getElementById('main'),ctx=canvas.getContext('2d');
 const spinPad=document.getElementById('spin-pad'),sCtx=spinPad.getContext('2d');
