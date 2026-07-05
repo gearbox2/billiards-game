@@ -7,7 +7,24 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#111;color:#eee;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:16px 8px;}
 h1{font-size:15px;font-weight:600;color:#aaa;letter-spacing:0.04em;margin-bottom:10px;}
+#outer{display:flex;gap:16px;align-items:flex-start;width:960px;max-width:100%;}
+#sidebar{width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
+#msg-card{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:14px;min-height:120px;}
+#msg-title{font-size:13px;font-weight:700;color:#ddd;margin-bottom:8px;line-height:1.4;}
+#msg-body{font-size:12px;color:#999;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+#msg-updated{font-size:10px;color:#444;margin-top:10px;}
+#edit-btn{width:100%;padding:7px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#666;cursor:pointer;font-size:11px;}
+#edit-btn:hover{border-color:#555;color:#aaa;}
+#edit-panel{display:none;background:#1a1a1a;border:1px solid #444;border-radius:10px;padding:14px;flex-direction:column;gap:8px;}
+#edit-panel input,#edit-panel textarea{background:#111;border:1px solid #444;border-radius:6px;color:#eee;padding:7px 9px;font-size:12px;font-family:inherit;width:100%;outline:none;resize:vertical;}
+#edit-panel input:focus,#edit-panel textarea:focus{border-color:#378add;}
+#edit-panel textarea{min-height:120px;}
+#edit-panel input[type=password]{letter-spacing:0.1em;}
+#save-btn{padding:7px;border-radius:8px;border:none;background:#185fa5;color:#fff;cursor:pointer;font-size:12px;font-weight:600;}
+#save-btn:hover{background:#1070b8;}
+#save-msg{font-size:11px;text-align:center;min-height:14px;}
 #app{display:flex;flex-direction:column;gap:10px;width:680px;max-width:100%;}
+@media(max-width:920px){#outer{flex-direction:column;width:100%;align-items:center;}#sidebar{width:100%;max-width:680px;flex-direction:row;flex-wrap:wrap;}#msg-card{flex:1;min-width:200px;}#edit-panel{width:100%;}}
 #toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .btn{padding:5px 12px;border-radius:8px;border:0.5px solid #666;background:#2a2a2a;color:#eee;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap;}
 .btn:hover{background:#333;}.btn.active{background:#1a3a5c;border-color:#378add;color:#7ab8f5;}
@@ -38,7 +55,25 @@ canvas{display:block;}
 </style>
 </head><body>
 <h1>BILLIARDS SHOT SIMULATOR</h1>
-<div id="app">
+<div id="outer">
+  <!-- Left sidebar: message board -->
+  <div id="sidebar">
+    <div id="msg-card">
+      <div id="msg-title">Loading…</div>
+      <div id="msg-body"></div>
+      <div id="msg-updated"></div>
+    </div>
+    <button id="edit-btn">✏️ Edit message</button>
+    <div id="edit-panel">
+      <input id="edit-title" type="text" placeholder="Title" maxlength="80">
+      <textarea id="edit-body" placeholder="Message body (supports line breaks)"></textarea>
+      <input id="edit-pass" type="password" placeholder="Admin password">
+      <button id="save-btn">Save</button>
+      <div id="save-msg"></div>
+    </div>
+  </div>
+  <!-- Main game -->
+  <div id="app">
   <div id="toolbar">
     <button class="btn" id="btnCB">Move CB</button>
     <button class="btn" id="btnOB">Move OB</button>
@@ -74,12 +109,84 @@ canvas{display:block;}
     <div id="status">Drag the ghost ball to aim. Press Space to shoot.</div>
     <span id="visitor-count">👁 —</span>
   </div>
-</div>
+</div><!-- #app -->
+</div><!-- #outer -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // Visitor counter
-fetch('/api/visit').then(r=>r.json()).then(({count})=>{
+fetch('/api/visit')
+
+// ── Message board ────────────────────────────────────────────────────────────
+const msgTitle   = document.getElementById('msg-title');
+const msgBody    = document.getElementById('msg-body');
+const msgUpdated = document.getElementById('msg-updated');
+const editBtn    = document.getElementById('edit-btn');
+const editPanel  = document.getElementById('edit-panel');
+const editTitleEl= document.getElementById('edit-title');
+const editBodyEl = document.getElementById('edit-body');
+const editPass   = document.getElementById('edit-pass');
+const saveBtn    = document.getElementById('save-btn');
+const saveMsgEl  = document.getElementById('save-msg');
+
+function loadMessage(){
+  fetch('/api/message')
+    .then(r=>r.json())
+    .then(d=>{
+      msgTitle.textContent = d.title || '';
+      msgBody.textContent  = d.body  || '';
+      msgUpdated.textContent = d.updated
+        ? 'Updated '+new Date(d.updated).toLocaleDateString()
+        : '';
+    })
+    .catch(()=>{ msgTitle.textContent='Welcome!'; msgBody.textContent='Drag the ghost ball to aim. Press Space to shoot.'; });
+}
+loadMessage();
+
+editBtn.addEventListener('click',()=>{
+  const open = editPanel.style.display==='flex';
+  editPanel.style.display = open ? 'none' : 'flex';
+  editBtn.textContent = open ? '✏️ Edit message' : '✖ Cancel';
+  if(!open){
+    // Pre-fill with current content
+    editTitleEl.value = msgTitle.textContent;
+    editBodyEl.value  = msgBody.textContent;
+    editPass.value    = '';
+    saveMsgEl.textContent = '';
+  }
+});
+
+saveBtn.addEventListener('click',()=>{
+  const title    = editTitleEl.value.trim();
+  const body     = editBodyEl.value.trim();
+  const password = editPass.value;
+  if(!title||!body){ saveMsgEl.style.color='#f55'; saveMsgEl.textContent='Title and body required.'; return; }
+  if(!password)    { saveMsgEl.style.color='#f55'; saveMsgEl.textContent='Password required.'; return; }
+  saveBtn.disabled=true; saveMsgEl.style.color='#aaa'; saveMsgEl.textContent='Saving…';
+  fetch('/api/message',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title,body,password})
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.ok){
+      saveMsgEl.style.color='#4caf50'; saveMsgEl.textContent='Saved!';
+      loadMessage();
+      setTimeout(()=>{
+        editPanel.style.display='none';
+        editBtn.textContent='✏️ Edit message';
+      },1200);
+    } else {
+      saveMsgEl.style.color='#f55';
+      saveMsgEl.textContent = d.error==='Unauthorized' ? 'Wrong password.' : (d.error||'Error saving.');
+    }
+  })
+  .catch(()=>{ saveMsgEl.style.color='#f55'; saveMsgEl.textContent='Network error.'; })
+  .finally(()=>{ saveBtn.disabled=false; });
+});
+
+// original visitor counter fetch.then(r=>r.json()).then(({count})=>{
   if(count!=null)document.getElementById('visitor-count').textContent='👁 '+count.toLocaleString()+' visits';
 }).catch(()=>{});
 
