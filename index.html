@@ -257,7 +257,7 @@ function fullStop(){animGen++;if(rafHandle!==null){cancelAnimationFrame(rafHandl
 function clampBounds(pos,vel){if(pos.x-BR<TP){pos.x=TP+BR;vel.x=Math.abs(vel.x)*.72;}if(pos.x+BR>TP+TW){pos.x=TP+TW-BR;vel.x=-Math.abs(vel.x)*.72;}if(pos.y-BR<TP){pos.y=TP+BR;vel.y=Math.abs(vel.y)*.72;}if(pos.y+BR>TP+TH){pos.y=TP+TH-BR;vel.y=-Math.abs(vel.y)*.72;}}
 function checkPocket(pos){return pockets.some(p=>dst(pos.x,pos.y,p.x,p.y)<PR+BR*.45);}
 
-btnReset.onclick=()=>{fullStop();s.cb={...ICB};s.ob={...IOB};s.cbPos={...ICB};s.obPos={...IOB};s.cbVel={x:0,y:0};s.obVel={x:0,y:0};s.cbAngle=0;s.obAngle=0;s.cbPocketed=false;s.obPocketed=false;dragTarget=null;s.spinX=0;s.spinY=0;s.trails=[];s.obTrails=[];s.aimAngle=Math.atan2(IOB.y-ICB.y,IOB.x-ICB.x);snapshot=null;s.mode='aim';s.cueStrikeAnim=0;_trajPts=[];btnCB.classList.remove('active');btnOB.classList.remove('active');btnAim.classList.add('active');btnReplay.disabled=true;power$.value=50;powerDisplay.textContent='50%';updateSpinLabel();cutInfo.textContent='Cut: 0°';drawSpinPad();statusEl.textContent='Reset. Drag ghost ball to aim.';drawScene();};
+btnReset.onclick=()=>{fullStop();s.cb={...ICB};s.ob={...IOB};s.cbPos={...ICB};s.obPos={...IOB};s.cbVel={x:0,y:0};s.obVel={x:0,y:0};s.cbAngle=0;s.obAngle=0;s.cbPocketed=false;s.obPocketed=false;dragTarget=null;s.spinX=0;s.spinY=0;s.trails=[];s.obTrails=[];s.aimAngle=Math.atan2(IOB.y-ICB.y,IOB.x-ICB.x);snapshot=null;s.mode='aim';s.cueStrikeAnim=0;_trajPts=[];camTargetInit=false;btnCB.classList.remove('active');btnOB.classList.remove('active');btnAim.classList.add('active');btnReplay.disabled=true;power$.value=50;powerDisplay.textContent='50%';updateSpinLabel();cutInfo.textContent='Cut: 0°';drawSpinPad();statusEl.textContent='Reset. Drag ghost ball to aim.';drawScene();};
 
 function runAnimation(){
   animGen++;const myGen=animGen;s.animating=true;s.trails=[];s.obTrails=[];s.cbAngle=0;s.obAngle=0;s.cbPocketed=false;s.obPocketed=false;s.cueStrikeAnim=18;_trajPts=[];
@@ -427,6 +427,10 @@ renderer3D.setPixelRatio(Math.min(window.devicePixelRatio||1, isMobile ? 1.5 : 2
   view3DReady=true;
 }
 
+// Smoothed cue-eye camera target — lerped each frame to eliminate micro-jitter
+const camTarget = {x:0, y:0, z:0, lx:0, lz:0};
+let camTargetInit = false;
+
 function sync3D(){
   if(!view3DReady)return;
   const cbx=s.animating?s.cbPos.x:s.cb.x,cby=s.animating?s.cbPos.y:s.cb.y;
@@ -440,7 +444,31 @@ function sync3D(){
   else{aimLineMesh.visible=false;updateTrajLines(null);}
   const shotAngle=s.animating?(Math.atan2(s.cbVel.y,s.cbVel.x)||cbToGhostAngle()):cbToGhostAngle();
   const dirX=Math.cos(shotAngle),dirZ=Math.sin(shotAngle);
-  if(camMode==='cue-eye'){const eb=s.cam3DDist,eh=18+eb*.22;camera3D.position.set(cb3.x-dirX*eb,TABLE_Y+eh,cb3.z-dirZ*eb);camera3D.lookAt(cb3.x+dirX*170,TABLE_Y+BALL_RADIUS_3D*.55,cb3.z+dirZ*170);}
+  if(camMode==='cue-eye'){
+    const eb=s.cam3DDist, eh=18+eb*.22;
+    // Desired camera position and look-at target this frame
+    const tgx=cb3.x-dirX*eb, tgy=TABLE_Y+eh, tgz=cb3.z-dirZ*eb;
+    const tlx=cb3.x+dirX*170, tlz=cb3.z+dirZ*170;
+    if(!camTargetInit){
+      // First frame — snap directly, no lerp
+      camTarget.x=tgx; camTarget.y=tgy; camTarget.z=tgz;
+      camTarget.lx=tlx; camTarget.lz=tlz;
+      camTargetInit=true;
+    } else {
+      // Smooth factor: during animation track faster (0.18) so ball doesn't
+      // outrun the camera; when static, snap immediately (1.0).
+      // This eliminates the pulsing on tablet while keeping the camera
+      // responsive during the shot.
+      const smooth = s.animating ? 0.18 : 1.0;
+      camTarget.x += (tgx - camTarget.x) * smooth;
+      camTarget.y += (tgy - camTarget.y) * smooth;
+      camTarget.z += (tgz - camTarget.z) * smooth;
+      camTarget.lx += (tlx - camTarget.lx) * smooth;
+      camTarget.lz += (tlz - camTarget.lz) * smooth;
+    }
+    camera3D.position.set(camTarget.x, camTarget.y, camTarget.z);
+    camera3D.lookAt(camTarget.lx, TABLE_Y+BALL_RADIUS_3D*.55, camTarget.lz);
+  }
   else{const cx=orbit.radius*Math.sin(orbit.phi)*Math.cos(orbit.theta),cy=orbit.radius*Math.cos(orbit.phi),cz=orbit.radius*Math.sin(orbit.phi)*Math.sin(orbit.theta);camera3D.position.set(cx,cy,cz);camera3D.lookAt(0,TABLE_Y,0);}
   renderer3D.render(scene3D,camera3D);
 }
