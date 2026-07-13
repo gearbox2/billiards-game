@@ -5,10 +5,10 @@
 <title>Billiards Shot Simulator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#111;color:#eee;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:16px 8px;}
-h1{font-size:15px;font-weight:600;color:#aaa;letter-spacing:0.04em;margin-bottom:10px;}
-#app{display:flex;flex-direction:column;gap:10px;width:680px;max-width:100%;}
-#toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+body{background:#111;color:#eee;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px 8px;overflow-x:hidden;}
+h1{font-size:14px;font-weight:600;color:#aaa;letter-spacing:0.04em;margin-bottom:8px;}
+#app{display:flex;flex-direction:column;gap:10px;width:100%;max-width:680px;}
+#toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .btn{padding:5px 12px;border-radius:8px;border:0.5px solid #666;background:#2a2a2a;color:#eee;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap;}
 .btn:hover{background:#333;}.btn.active{background:#1a3a5c;border-color:#378add;color:#7ab8f5;}
 .btn.shoot{background:#185fa5;color:#fff;border-color:transparent;}.btn.shoot:hover{background:#1070b8;}
@@ -17,12 +17,14 @@ h1{font-size:15px;font-weight:600;color:#aaa;letter-spacing:0.04em;margin-bottom
 .btn.resetbtn{color:#aaa;}
 label{font-size:12px;color:#aaa;}
 input[type=range]{accent-color:#378add;}
-#canvas-wrap{border-radius:10px;overflow:hidden;border:2px solid #2d5a1b;}
+#canvas-wrap{border-radius:10px;overflow:hidden;border:2px solid #2d5a1b;width:100%;line-height:0;}
+#canvas-wrap canvas{display:block;width:100%;height:auto;}
 canvas{display:block;}
 #view3d-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 #view3d-toolbar input[type=range]{width:140px;}
 #zoom3d-display{font-size:12px;font-weight:600;color:#eee;min-width:28px;}
-#view3d-wrap{border-radius:10px;overflow:hidden;border:2px solid #444;width:680px;height:300px;position:relative;background:#0a0a0a;}
+#view3d-wrap{border-radius:10px;overflow:hidden;border:2px solid #444;width:100%;height:300px;position:relative;background:#0a0a0a;}
+@media(max-width:500px){#view3d-wrap{height:200px;}#tip-qr-wrap img{width:130px;height:130px;}.btn,.cam-btn{font-size:11px;padding:4px 8px;}}
 #view3d-label{position:absolute;top:6px;left:8px;font-size:10px;color:rgba(255,255,255,0.45);font-weight:500;letter-spacing:0.02em;z-index:2;pointer-events:none;}
 #status-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 #status{font-size:12px;color:#999;min-height:18px;}
@@ -52,6 +54,15 @@ canvas{display:block;}
 #tip-qr-wrap{display:none;margin-top:12px;}
 #tip-qr-wrap img{width:160px;height:160px;border-radius:8px;border:3px solid #fff;display:block;margin:0 auto 8px;}
 #tip-qr-wrap p{font-size:11px;color:#777;line-height:1.5;}
+/* Fullscreen toggle buttons */
+.fs-btn{position:absolute;top:6px;right:8px;z-index:10;background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:rgba(255,255,255,0.7);cursor:pointer;padding:4px 6px;font-size:14px;line-height:1;transition:background 0.15s;}
+.fs-btn:hover{background:rgba(0,0,0,0.75);color:#fff;}
+#canvas-wrap{position:relative;}
+/* When either panel is fullscreen, fill the screen */
+#canvas-wrap:fullscreen,#canvas-wrap:-webkit-full-screen{background:#111;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+#canvas-wrap:fullscreen canvas,#canvas-wrap:-webkit-full-screen canvas{width:100%;height:100%;object-fit:contain;}
+#view3d-wrap:fullscreen,#view3d-wrap:-webkit-full-screen{width:100vw;height:100vh;}
+#view3d-wrap:fullscreen #view3d-label,#view3d-wrap:-webkit-full-screen #view3d-label{font-size:12px;}
 </style>
 </head><body>
 <h1>BILLIARDS SHOT SIMULATOR</h1>
@@ -92,7 +103,10 @@ canvas{display:block;}
     <button class="btn resetbtn" id="btnReset">Reset</button>
     <span id="space-hint">Space = shoot</span>
   </div>
-  <div id="canvas-wrap"><canvas id="main" width="680" height="400"></canvas></div>
+  <div id="canvas-wrap">
+    <button class="fs-btn" id="fs2d" title="Fullscreen" onclick="toggleFS(document.getElementById('canvas-wrap'), this)">&#x26F6;</button>
+    <canvas id="main" width="680" height="400"></canvas>
+  </div>
   <div id="view3d-toolbar">
     <button class="cam-btn active" id="btnCueEye">Cue-eye</button>
     <button class="cam-btn" id="btnOrbit">Free orbit</button>
@@ -103,7 +117,10 @@ canvas{display:block;}
     </div>
     <span id="orbit-hint" style="display:none;font-size:11px;color:#666;">Drag to rotate · Scroll or pinch to zoom</span>
   </div>
-  <div id="view3d-wrap"><div id="view3d-label">Cue-eye view</div></div>
+  <div id="view3d-wrap">
+    <div id="view3d-label">Cue-eye view</div>
+    <button class="fs-btn" id="fs3d" title="Fullscreen" onclick="toggleFS(document.getElementById('view3d-wrap'), this)">&#x26F6;</button>
+  </div>
   <div id="status-row">
     <div id="status">Drag the ghost ball to aim. Press Space to shoot.</div>
     <span id="visitor-count">👁 —</span>
@@ -528,5 +545,35 @@ window.addEventListener('resize',resize3D);
 
 drawScene();
 requestAnimationFrame(()=>{initThree();resize3D();sync3D();});
+
+// ── Fullscreen toggle ────────────────────────────────────────────────────────
+function toggleFS(el, btn){
+  const isFS = document.fullscreenElement === el || document.webkitFullscreenElement === el;
+  if(isFS){
+    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+  } else {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if(req) req.call(el);
+  }
+}
+
+// Update icon when fullscreen state changes (exit via Escape key etc.)
+function onFSChange(){
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  document.querySelectorAll('.fs-btn').forEach(function(btn){
+    const panel = btn.parentElement;
+    if(fsEl === panel){
+      btn.innerHTML = '&#x274C;'; // X when fullscreen
+      btn.title = 'Exit fullscreen';
+    } else {
+      btn.innerHTML = '&#x26F6;'; // expand icon when normal
+      btn.title = 'Fullscreen';
+    }
+  });
+  // Resize 3D renderer when entering/exiting fullscreen
+  setTimeout(resize3D, 100);
+}
+document.addEventListener('fullscreenchange', onFSChange);
+document.addEventListener('webkitfullscreenchange', onFSChange);
 </script>
 </body></html>
